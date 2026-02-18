@@ -12,7 +12,11 @@ Item {
     property string selfDNSName: ""
     property string magicDNSSuffix: ""
     property string currentExitNode: ""
-    property var devices: ListModel {}
+    property alias devices: deviceModel
+
+    ListModel {
+        id: deviceModel
+    }
 
     // Prefs properties
     property bool acceptRoutes: false
@@ -77,6 +81,7 @@ Item {
         if (!stdout) {
             connected = false
             backendState = "Unknown"
+            devices.clear()
             return
         }
 

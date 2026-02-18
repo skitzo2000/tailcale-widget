@@ -7,7 +7,7 @@ MouseArea {
 
     readonly property bool connected: root.tsConnected
     readonly property bool isDark: Kirigami.Theme.textColor.hslLightness > 0.5
-    readonly property string exitActive: root.tsCurrentExitNode !== ""
+    readonly property bool exitActive: root.tsCurrentExitNode !== ""
 
     function iconPath() {
         var variant = isDark ? "breeze-dark" : "breeze-light"

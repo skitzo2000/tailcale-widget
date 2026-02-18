@@ -204,10 +204,11 @@ Item {
 
             // Device list
             Repeater {
-                model: root.tsConnected ? root.tsDevices : null
+                model: root.tsDevices
 
                 DeviceItem {
                     Layout.fillWidth: true
+                    visible: root.tsConnected
                 }
             }
 
@@ -308,7 +309,7 @@ Item {
                 visible: !root.tsConnected && root.tsErrorState === ""
                 text: "Tailscale is disconnected"
                 explanation: "Toggle the switch above to connect"
-                iconName: Qt.resolvedUrl("icons/offline-" + (fullRoot.isDark ? "breeze-dark" : "breeze-light") + ".svg")
+                iconName: "network-vpn"
             }
         }
     }
