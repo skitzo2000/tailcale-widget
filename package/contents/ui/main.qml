@@ -22,15 +22,30 @@ PlasmoidItem {
     property bool tsAdvertiseExitNode: tailscale.advertiseExitNode
     property bool tsAllowLAN: tailscale.allowLAN
 
+    // Profile management
+    property bool tsSwitching: tailscale.switching
+    property string tsSwitchError: tailscale.switchError
+    property var tsProfiles: []
+    property string tsActiveProfileName: resolveActiveProfile()
+
     compactRepresentation: CompactRepresentation {}
     fullRepresentation: FullRepresentation {}
 
-    toolTipMainText: "Tailscale"
-    toolTipSubText: tsConnected ? "Connected — " + tsHostname : "Disconnected"
+    toolTipMainText: tsActiveProfileName
+    toolTipSubText: tsConnected ? tsActiveProfileName + " — " + tsHostname : "Disconnected"
 
     TailscaleService {
         id: tailscale
     }
+
+    Connections {
+        target: Plasmoid.configuration
+        function onServerProfilesChanged() {
+            root.parseProfiles()
+        }
+    }
+
+    Component.onCompleted: parseProfiles()
 
     function toggleConnection() {
         tailscale.toggleConnection()
@@ -38,5 +53,40 @@ PlasmoidItem {
 
     function setOption(flag, value) {
         tailscale.setOption(flag, value)
+    }
+
+    function parseProfiles() {
+        try {
+            tsProfiles = JSON.parse(Plasmoid.configuration.serverProfiles)
+        } catch(e) {
+            tsProfiles = [{"name": "Tailscale", "loginServerUrl": "", "authKey": ""}]
+        }
+        if (tsProfiles.length === 0) {
+            tsProfiles = [{"name": "Tailscale", "loginServerUrl": "", "authKey": ""}]
+        }
+    }
+
+    function resolveActiveProfile() {
+        var url = tailscale.controlURL
+        for (var i = 0; i < tsProfiles.length; i++) {
+            var profileUrl = tsProfiles[i].loginServerUrl
+            // Empty loginServerUrl matches official Tailscale
+            if (profileUrl === "" && (url === "" || url === "https://controlplane.tailscale.com")) {
+                return tsProfiles[i].name
+            }
+            if (profileUrl === url) {
+                return tsProfiles[i].name
+            }
+        }
+        if (tsProfiles.length > 0) {
+            return tsProfiles[0].name  // fallback to first profile
+        }
+        return "Tailscale"
+    }
+
+    function switchProfile(index) {
+        if (index < 0 || index >= tsProfiles.length) return
+        var profile = tsProfiles[index]
+        tailscale.switchProfile(profile.loginServerUrl, profile.authKey)
     }
 }

@@ -13,5 +13,11 @@
         "Version": "0.1.0"
     },
     "KPackageStructure": "Plasma/Applet",
-    "X-Plasma-API-Minimum-Version": "6.0"
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-ConfigModel": [
+        {
+            "Name": "Server Profiles",
+            "Source": "config.qml"
+        }
+    ]
 }

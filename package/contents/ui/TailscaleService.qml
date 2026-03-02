@@ -25,6 +25,11 @@ Item {
     property bool runSSH: false
     property bool advertiseExitNode: false
     property bool allowLAN: false
+    property string controlURL: ""
+    property bool switching: false
+    property string switchError: ""
+    property string pendingSwitchUrl: "__none__"  // using sentinel since empty string is valid (= official Tailscale)
+    property string pendingSwitchAuthKey: ""
 
     Plasma5Support.DataSource {
         id: executable
@@ -44,6 +49,35 @@ Item {
                 parseStatus(stdout)
             } else if (sourceName.indexOf("tailscale debug prefs") !== -1) {
                 parsePrefs(stdout)
+            } else if (sourceName.indexOf("tailscale logout") !== -1) {
+                if (pendingSwitchUrl !== "__none__") {
+                    if (exitCode !== 0 && stderr) {
+                        // Logout failed — abort switch
+                        switchError = "Logout failed: " + stderr.trim()
+                        switching = false
+                        pendingSwitchUrl = "__none__"
+                        pendingSwitchAuthKey = ""
+                    } else {
+                        // Step 2 of profile switch: connect to new server
+                        var cmd = "tailscale up"
+                        if (pendingSwitchUrl !== "") {
+                            cmd += " --login-server=" + pendingSwitchUrl
+                        }
+                        if (pendingSwitchAuthKey !== "") {
+                            cmd += " --authkey=" + pendingSwitchAuthKey
+                        }
+                        executable.run(cmd)
+                    }
+                }
+            } else if (sourceName.indexOf("tailscale up") !== -1 && switching) {
+                if (exitCode !== 0 && stderr) {
+                    switchError = stderr.trim()
+                }
+                switching = false
+                pendingSwitchUrl = "__none__"
+                pendingSwitchAuthKey = ""
+                // Trigger immediate poll to refresh state
+                pollAfterSet.restart()
             }
 
             disconnectSource(sourceName)
@@ -90,6 +124,11 @@ Item {
 
             backendState = json.BackendState || "Unknown"
             connected = (backendState === "Running")
+
+            // Clear switch error once we're connected again
+            if (connected && switchError !== "") {
+                switchError = ""
+            }
 
             if (json.Self) {
                 selfHostname = json.Self.HostName || ""
@@ -197,6 +236,7 @@ Item {
                     break
                 }
             }
+            controlURL = json.ControlURL || ""
         } catch (e) {
             console.warn("Tailscale: failed to parse prefs JSON:", e)
         }
@@ -221,6 +261,14 @@ Item {
             executable.run("tailscale status --json")
             executable.run("tailscale debug prefs")
         }
+    }
+
+    function switchProfile(loginServerUrl, authKey) {
+        switching = true
+        switchError = ""
+        pendingSwitchUrl = loginServerUrl
+        pendingSwitchAuthKey = authKey || ""
+        executable.run("tailscale logout")
     }
 
     function toggleConnection() {

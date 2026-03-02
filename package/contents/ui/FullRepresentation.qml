@@ -27,6 +27,26 @@ Item {
         id: heading
         anchors { top: parent.top; left: parent.left; right: parent.right }
 
+        PlasmaComponents.Menu {
+            id: profileMenu
+
+            Instantiator {
+                model: root.tsProfiles
+                delegate: PlasmaComponents.MenuItem {
+                    text: modelData.name
+                    checkable: true
+                    checked: modelData.name === root.tsActiveProfileName
+                    onTriggered: {
+                        if (!checked) {
+                            root.switchProfile(index)
+                        }
+                    }
+                }
+                onObjectAdded: (index, object) => profileMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => profileMenu.removeItem(object)
+            }
+        }
+
         RowLayout {
             anchors.fill: parent
 
@@ -40,21 +60,61 @@ Item {
                 Layout.fillWidth: true
                 spacing: 0
 
-                PlasmaComponents.Label {
-                    text: "Tailscale"
-                    font.bold: true
+                RowLayout {
                     Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    PlasmaComponents.Label {
+                        text: root.tsActiveProfileName
+                        font.bold: true
+                        Layout.fillWidth: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: root.tsProfiles.length > 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: {
+                                if (root.tsProfiles.length > 1) {
+                                    profileMenu.open()
+                                }
+                            }
+                        }
+                    }
+
+                    Kirigami.Icon {
+                        source: "arrow-down"
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                        opacity: 0.5
+                        visible: root.tsProfiles.length > 1
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: profileMenu.open()
+                        }
+                    }
                 }
 
                 PlasmaComponents.Label {
-                    text: root.tsConnected ? root.tsBackendState : "Disconnected"
+                    text: {
+                        if (root.tsSwitching) return "Switching..."
+                        if (root.tsSwitchError !== "") return "Error: " + root.tsSwitchError
+                        return root.tsConnected ? root.tsBackendState : "Disconnected"
+                    }
                     font: Kirigami.Theme.smallFont
                     opacity: 0.7
                     Layout.fillWidth: true
                 }
             }
 
+            PlasmaComponents.BusyIndicator {
+                visible: root.tsSwitching
+                Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+            }
+
             PlasmaComponents.Switch {
+                visible: !root.tsSwitching
                 checked: root.tsConnected
                 onToggled: root.toggleConnection()
             }
