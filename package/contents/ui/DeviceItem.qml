@@ -99,18 +99,30 @@ ColumnLayout {
             }
 
             PlasmaComponents.Label {
-                text: model.tailscaleIP
+                id: ipLabel
+                property bool justCopied: false
+                text: ipLabel.justCopied ? "Copied!" : model.tailscaleIP
                 color: ipMouseArea.containsMouse ? Kirigami.Theme.linkColor : Kirigami.Theme.textColor
                 opacity: ipMouseArea.containsMouse ? 1.0 : 0.7
                 elide: Text.ElideRight
                 Layout.fillWidth: true
+
+                Timer {
+                    id: copiedTimer
+                    interval: 1200
+                    onTriggered: ipLabel.justCopied = false
+                }
 
                 MouseArea {
                     id: ipMouseArea
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     hoverEnabled: true
-                    onClicked: Qt.openUrlExternally("http://" + model.tailscaleIP)
+                    onClicked: {
+                        root.copyToClipboard(model.tailscaleIP)
+                        ipLabel.justCopied = true
+                        copiedTimer.restart()
+                    }
                 }
             }
 

@@ -14,8 +14,18 @@ Item {
     property string currentExitNode: ""
     property alias devices: deviceModel
 
+    // Tailnet (account) switching
+    property string currentTailnet: ""          // CurrentTailnet.Name from status
+    property bool switchAccessDenied: false      // true when `switch --list` needs operator mode
+    property bool switching: false               // true while a `tailscale switch` is in flight
+    property alias tailnets: tailnetModel        // available accounts to switch to
+
     ListModel {
         id: deviceModel
+    }
+
+    ListModel {
+        id: tailnetModel
     }
 
     // Prefs properties
@@ -44,6 +54,12 @@ Item {
                 parseStatus(stdout)
             } else if (sourceName.indexOf("tailscale debug prefs") !== -1) {
                 parsePrefs(stdout)
+            } else if (sourceName.indexOf("tailscale switch --list") !== -1) {
+                parseSwitchList(stdout, stderr, exitCode)
+            } else if (sourceName.indexOf("tailscale switch ") !== -1) {
+                // A `tailscale switch <id>` finished — refresh everything.
+                switching = false
+                pollAfterSet.restart()
             }
 
             disconnectSource(sourceName)
@@ -54,16 +70,20 @@ Item {
         }
     }
 
+    // Run the full set of read commands that drive the UI.
+    function refresh() {
+        executable.run("tailscale status --json")
+        executable.run("tailscale debug prefs")
+        executable.run("tailscale switch --list")
+    }
+
     Timer {
         id: pollTimer
         interval: 5000
         running: true
         repeat: true
         triggeredOnStart: true
-        onTriggered: {
-            executable.run("tailscale status --json")
-            executable.run("tailscale debug prefs")
-        }
+        onTriggered: service.refresh()
     }
 
     function detectError(stderr, exitCode) {
@@ -102,6 +122,10 @@ Item {
             }
 
             magicDNSSuffix = json.MagicDNSSuffix || ""
+
+            if (json.CurrentTailnet) {
+                currentTailnet = json.CurrentTailnet.Name || ""
+            }
 
             // Build new peer list from JSON
             var newPeers = []
@@ -202,6 +226,52 @@ Item {
         }
     }
 
+    // Parse the columnar output of `tailscale switch --list`:
+    //
+    //   ID    Tailnet                  Account
+    //   c9a9  goldfish.paul@gmail.com  goldfish.paul@gmail.com
+    //   29cd  skerbetzdc@yahoo.com     goldfish.paul@gmail.com*
+    //
+    // The currently-active account is marked with a trailing "*".
+    // Listing accounts requires operator mode; without it the command
+    // fails with an "access denied" error.
+    function parseSwitchList(stdout, stderr, exitCode) {
+        var msg = (stderr || "").toLowerCase()
+        if (exitCode !== 0 || msg.indexOf("access denied") !== -1) {
+            switchAccessDenied = (msg.indexOf("access denied") !== -1 || msg.indexOf("denied") !== -1)
+            tailnetModel.clear()
+            return
+        }
+        switchAccessDenied = false
+
+        var lines = (stdout || "").split("\n")
+        tailnetModel.clear()
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim()
+            if (line === "") continue
+            // Skip the header row.
+            if (line.indexOf("ID") === 0 && line.indexOf("Tailnet") !== -1) continue
+
+            var isCurrent = line.charAt(line.length - 1) === "*"
+            var clean = isCurrent ? line.slice(0, -1).trim() : line
+            var fields = clean.split(/\s{2,}/)
+            if (fields.length < 2) continue
+
+            tailnetModel.append({
+                accountId: fields[0],
+                tailnet: fields[1],
+                account: fields.length >= 3 ? fields[2] : fields[1],
+                current: isCurrent
+            })
+        }
+    }
+
+    function switchTailnet(accountId) {
+        if (!accountId || switching) return
+        switching = true
+        executable.run("tailscale switch " + accountId)
+    }
+
     function setOption(flag, value) {
         var cmd
         if (typeof value === "boolean") {
@@ -217,10 +287,7 @@ Item {
         id: pollAfterSet
         interval: 1000
         repeat: false
-        onTriggered: {
-            executable.run("tailscale status --json")
-            executable.run("tailscale debug prefs")
-        }
+        onTriggered: service.refresh()
     }
 
     function toggleConnection() {

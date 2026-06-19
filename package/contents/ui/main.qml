@@ -14,6 +14,12 @@ PlasmoidItem {
     property string tsSelfDNSName: tailscale.selfDNSName
     property string tsCurrentExitNode: tailscale.currentExitNode
 
+    // Tailnet (account) switching
+    property string tsCurrentTailnet: tailscale.currentTailnet
+    property var tsTailnets: tailscale.tailnets
+    property bool tsSwitchAccessDenied: tailscale.switchAccessDenied
+    property bool tsSwitching: tailscale.switching
+
     // Settings booleans
     property bool tsAcceptRoutes: tailscale.acceptRoutes
     property bool tsAcceptDNS: tailscale.acceptDNS
@@ -25,7 +31,7 @@ PlasmoidItem {
     compactRepresentation: CompactRepresentation {}
     fullRepresentation: FullRepresentation {}
 
-    toolTipMainText: "Tailscale"
+    toolTipMainText: tsCurrentTailnet !== "" ? tsCurrentTailnet : "Tailscale"
     toolTipSubText: tsConnected ? "Connected — " + tsHostname : "Disconnected"
 
     TailscaleService {
@@ -38,5 +44,22 @@ PlasmoidItem {
 
     function setOption(flag, value) {
         tailscale.setOption(flag, value)
+    }
+
+    function switchTailnet(accountId) {
+        tailscale.switchTailnet(accountId)
+    }
+
+    // Hidden helper used to copy text (IP addresses) to the clipboard.
+    TextEdit {
+        id: clipboardHelper
+        visible: false
+    }
+
+    function copyToClipboard(text) {
+        clipboardHelper.text = text
+        clipboardHelper.selectAll()
+        clipboardHelper.copy()
+        clipboardHelper.text = ""
     }
 }

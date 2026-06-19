@@ -8,6 +8,7 @@ Item {
     id: fullRoot
 
     property bool settingsExpanded: false
+    property bool tailnetExpanded: false
 
     readonly property bool isDark: Kirigami.Theme.textColor.hslLightness > 0.5
 
@@ -79,6 +80,147 @@ Item {
             width: flick.width
             spacing: 0
 
+            // Tailnet switcher — collapsible, like the Settings section
+            PlasmaComponents.ItemDelegate {
+                Layout.fillWidth: true
+                visible: root.tsTailnets.count > 1 && !root.tsSwitching
+                onClicked: fullRoot.tailnetExpanded = !fullRoot.tailnetExpanded
+
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Icon {
+                        source: "network-workgroup"
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                        opacity: 0.7
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+
+                        PlasmaComponents.Label {
+                            text: "Tailnet"
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+
+                        PlasmaComponents.Label {
+                            text: root.tsCurrentTailnet !== "" ? root.tsCurrentTailnet : "Unknown"
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.7
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    Kirigami.Icon {
+                        source: fullRoot.tailnetExpanded ? "arrow-up" : "arrow-down"
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                        opacity: 0.5
+                    }
+                }
+            }
+
+            // Tailnet list — expands inline
+            ColumnLayout {
+                visible: fullRoot.tailnetExpanded && root.tsTailnets.count > 1 && !root.tsSwitching
+                Layout.fillWidth: true
+                spacing: 0
+
+                Repeater {
+                    model: root.tsTailnets
+
+                    PlasmaComponents.ItemDelegate {
+                        Layout.fillWidth: true
+                        enabled: !model.current
+                        onClicked: {
+                            root.switchTailnet(model.accountId)
+                            fullRoot.tailnetExpanded = false
+                        }
+
+                        contentItem: RowLayout {
+                            spacing: Kirigami.Units.smallSpacing
+
+                            Kirigami.Icon {
+                                source: "checkmark"
+                                visible: model.current
+                                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                            }
+
+                            Item {
+                                visible: !model.current
+                                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                            }
+
+                            PlasmaComponents.Label {
+                                text: model.tailnet
+                                font.bold: model.current
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Tailnet switch in progress
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.margins: Kirigami.Units.smallSpacing
+                spacing: Kirigami.Units.smallSpacing
+                visible: root.tsSwitching
+
+                PlasmaComponents.BusyIndicator {
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                    running: root.tsSwitching
+                }
+
+                PlasmaComponents.Label {
+                    text: "Switching tailnet…"
+                    opacity: 0.7
+                    Layout.fillWidth: true
+                }
+            }
+
+            // Operator mode required to list/switch tailnets
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.margins: Kirigami.Units.smallSpacing
+                spacing: 2
+                visible: root.tsSwitchAccessDenied
+
+                PlasmaComponents.Label {
+                    text: "Enable tailnet switching"
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+
+                PlasmaComponents.Label {
+                    text: "Switching between tailnets needs operator mode. Run this once:"
+                    wrapMode: Text.WordWrap
+                    opacity: 0.7
+                    Layout.fillWidth: true
+                }
+
+                PlasmaComponents.Label {
+                    text: "sudo tailscale set --operator=$USER"
+                    font.family: "monospace"
+                    wrapMode: Text.WrapAnywhere
+                    Layout.fillWidth: true
+                }
+            }
+
+            Kirigami.Separator {
+                Layout.fillWidth: true
+                visible: (root.tsTailnets.count > 1 || root.tsSwitchAccessDenied) && root.tsConnected
+            }
+
             // Self info
             ColumnLayout {
                 Layout.fillWidth: true
@@ -95,9 +237,30 @@ Item {
                 }
 
                 PlasmaComponents.Label {
-                    text: root.tsIP
-                    opacity: 0.7
+                    id: selfIpLabel
+                    property bool justCopied: false
+                    text: selfIpLabel.justCopied ? "Copied!" : root.tsIP
+                    color: selfIpMouseArea.containsMouse ? Kirigami.Theme.linkColor : Kirigami.Theme.textColor
+                    opacity: selfIpMouseArea.containsMouse ? 1.0 : 0.7
                     Layout.fillWidth: true
+
+                    Timer {
+                        id: selfCopiedTimer
+                        interval: 1200
+                        onTriggered: selfIpLabel.justCopied = false
+                    }
+
+                    MouseArea {
+                        id: selfIpMouseArea
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+                        onClicked: {
+                            root.copyToClipboard(root.tsIP)
+                            selfIpLabel.justCopied = true
+                            selfCopiedTimer.restart()
+                        }
+                    }
                 }
 
                 PlasmaComponents.Label {
